@@ -36,7 +36,7 @@ class MusicTransformer(nn.Module):
         self.positional_encoding = positional_encoding
         if self.positional_encoding:
             pos = torch.zeros(5000, d_model)
-            position = torch.arange(5000).unsqueeze(1)
+            position = torch.arange(5000).unsqueeze(1).type(torch.FloatTensor)
             #geometric progression of wave lengths
             div_term = torch.exp(torch.arange(0.0, d_model, 2) * \
                             - (math.log(10000.0) / d_model))
