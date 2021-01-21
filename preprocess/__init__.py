@@ -1,2 +1,2 @@
-from .pipeline import PreprocessingPipeline
+from .pipeline import PreprocessingPipeline, apply_sustain
 from .sequence_encoder import SequenceEncoder

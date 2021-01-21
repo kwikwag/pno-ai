@@ -146,96 +146,12 @@ class PreprocessingPipeline():
                 #todo: write logic to safely catch if there are non piano instruments,
                 #or extract the piano midi if it exists
                 raise PreprocessingError("Non-piano midi detected")
-            note_sequence = self.apply_sustain(piano_data)
+            note_sequence = apply_sustain(piano_data)
             note_sequence = sorted(note_sequence, key = lambda x: (x.start, x.pitch))
             note_sequences.append(note_sequence)
 
         return note_sequences
 
-
-
-    def apply_sustain(self, piano_data):
-        """
-        While the sustain pedal is applied during a midi, extend the length of all 
-        notes to the beginning of the next note of the same pitch or to 
-        the end of the sustain. Returns a midi notes sequence.
-        """
-        _SUSTAIN_ON = 0
-        _SUSTAIN_OFF = 1
-        _NOTE_ON = 2
-        _NOTE_OFF = 3
- 
-        notes = copy.deepcopy(piano_data.notes)
-        control_changes = piano_data.control_changes
-        #sequence of SUSTAIN_ON, SUSTAIN_OFF, NOTE_ON, and NOTE_OFF actions
-        first_sustain_control = next((c for c in control_changes if c.number == 64),
-                ControlChange(number=64, value=0, time=0))
-
-        if first_sustain_control.value >= 64:
-            sustain_position = _SUSTAIN_ON
-        else:
-            sustain_position = _SUSTAIN_OFF
-        #if for some reason pedal was not touched...
-        action_sequence = [(first_sustain_control.time, sustain_position, None)]
-        #delete this please
-        cleaned_controls = []
-        for c in control_changes:
-            #Ignoring the sostenuto and damper pedals due to complications
-            if sustain_position == _SUSTAIN_ON:
-                if c.value >= 64:
-                    #another SUSTAIN_ON
-                    continue
-                else:
-                    sustain_position = _SUSTAIN_OFF
-            else:
-                #look for the next on signal
-                if c.value < 64:
-                    #another SUSTAIN_OFF
-                    continue
-                else:
-                    sustain_position = _SUSTAIN_ON
-            action_sequence.append((c.time, sustain_position, None))
-            cleaned_controls.append((c.time, sustain_position))
-    
-        action_sequence.extend([(note.start, _NOTE_ON, note) for note in notes])
-        action_sequence.extend([(note.end, _NOTE_OFF, note) for note in notes])
-        #sort actions by time and type
-    
-        action_sequence = sorted(action_sequence, key = lambda x: (x[0], x[1]))
-        live_notes = []
-        sustain = False
-        for action in action_sequence:
-            if action[1] == _SUSTAIN_ON:
-                sustain = True
-            elif action[1] == _SUSTAIN_OFF:
-                #find when the sustain pedal is released
-                off_time = action[0]
-                for note in live_notes:
-                    if note.end < off_time:
-                        #shift the end of the note to when the pedal is released
-                        note.end = off_time
-                        live_notes.remove(note)
-                sustain = False
-            elif action[1] == _NOTE_ON:
-                current_note = action[2]
-                if sustain:
-                    for note in live_notes:
-                        # if there are live notes of the same pitch being held, kill 'em
-                        if current_note.pitch == note.pitch:
-                            note.end = current_note.start
-                            live_notes.remove(note)
-                live_notes.append(current_note)
-            else:
-                if sustain == True:
-                    continue
-                else:
-                    note = action[2]
-                    try:
-                        live_notes.remove(note)
-                    except ValueError:
-                        print("***Unexpected note sequence...possible duplicate?")
-                        pass
-        return notes
 
     def partition(self, sequences):
        """
@@ -366,4 +282,85 @@ class PreprocessingPipeline():
         return transposed_samples
 
 
+def apply_sustain(piano_data):
+    """
+    While the sustain pedal is applied during a midi, extend the length of all
+    notes to the beginning of the next note of the same pitch or to
+    the end of the sustain. Returns a midi notes sequence.
+    """
+    _SUSTAIN_ON = 0
+    _SUSTAIN_OFF = 1
+    _NOTE_ON = 2
+    _NOTE_OFF = 3
 
+    notes = copy.deepcopy(piano_data.notes)
+    control_changes = piano_data.control_changes
+    # sequence of SUSTAIN_ON, SUSTAIN_OFF, NOTE_ON, and NOTE_OFF actions
+    first_sustain_control = next((c for c in control_changes if c.number == 64),
+                                 ControlChange(number=64, value=0, time=0))
+
+    if first_sustain_control.value >= 64:
+        sustain_position = _SUSTAIN_ON
+    else:
+        sustain_position = _SUSTAIN_OFF
+    # if for some reason pedal was not touched...
+    action_sequence = [(first_sustain_control.time, sustain_position, None)]
+    # delete this please
+    cleaned_controls = []
+    for c in control_changes:
+        # Ignoring the sostenuto and damper pedals due to complications
+        if sustain_position == _SUSTAIN_ON:
+            if c.value >= 64:
+                # another SUSTAIN_ON
+                continue
+            else:
+                sustain_position = _SUSTAIN_OFF
+        else:
+            # look for the next on signal
+            if c.value < 64:
+                # another SUSTAIN_OFF
+                continue
+            else:
+                sustain_position = _SUSTAIN_ON
+        action_sequence.append((c.time, sustain_position, None))
+        cleaned_controls.append((c.time, sustain_position))
+
+    action_sequence.extend([(note.start, _NOTE_ON, note) for note in notes])
+    action_sequence.extend([(note.end, _NOTE_OFF, note) for note in notes])
+    # sort actions by time and type
+
+    action_sequence = sorted(action_sequence, key=lambda x: (x[0], x[1]))
+    live_notes = []
+    sustain = False
+    for action in action_sequence:
+        if action[1] == _SUSTAIN_ON:
+            sustain = True
+        elif action[1] == _SUSTAIN_OFF:
+            # find when the sustain pedal is released
+            off_time = action[0]
+            for note in live_notes:
+                if note.end < off_time:
+                    # shift the end of the note to when the pedal is released
+                    note.end = off_time
+                    live_notes.remove(note)
+            sustain = False
+        elif action[1] == _NOTE_ON:
+            current_note = action[2]
+            if sustain:
+                for note in live_notes:
+                    # if there are live notes of the same pitch being held, kill 'em
+                    if current_note.pitch == note.pitch:
+                        note.end = current_note.start
+                        live_notes.remove(note)
+            live_notes.append(current_note)
+        else:
+            if sustain == True:
+                continue
+            else:
+                note = action[2]
+                try:
+                    live_notes.remove(note)
+                except ValueError:
+                    print("***Unexpected note sequence...possible duplicate?")
+                    pass
+    return notes
