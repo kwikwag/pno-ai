@@ -1,5 +1,11 @@
 music_model:
-  path: tf_01202021_e2
+  path: saved_models/tf_01202021_e2
   args:
     n_tokens: 413
     seq_length: 1024
+    d_model: 64
+    n_heads: 8
+    d_feedforward: 256
+    depth: 4
+    positional_encoding: True
+    relative_pos: True
