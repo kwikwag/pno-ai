@@ -1,4 +1,4 @@
-from helpers import prepare_batches
+from ..helpers import prepare_batches
 from .custom import Accuracy, smooth_cross_entropy, TFSchedule
 import torch
 import torch.nn as nn

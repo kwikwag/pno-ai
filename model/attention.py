@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import math
 import torch.nn.functional as F
-from helpers import d
+from ..helpers import d
 
 class AttentionError(Exception):
     pass
