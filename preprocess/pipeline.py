@@ -124,6 +124,8 @@ class PreprocessingPipeline():
                     midi_str = six.BytesIO(f.read())
                     pretty_midis.append(pretty_midi.PrettyMIDI(midi_str))
                     #print("Successfully parsed {}".format(m))
+                except KeyboardInterrupt:
+                    raise
                 except:
                     print("Could not parse {}".format(m))
         if chdir:

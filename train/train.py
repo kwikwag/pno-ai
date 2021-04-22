@@ -152,6 +152,8 @@ def train(model, training_data, validation_data,
                     torch.save(model.state_dict(),
                             checkpoint_path+f"_e{e}")
                     print("Checkpoint saved!")
+                except KeyboardInterrupt:
+                    raise
                 except:
                     print("Error: checkpoint could not be saved...")
 
