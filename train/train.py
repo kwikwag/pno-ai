@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import time
 from random import shuffle
+from tqdm import tqdm
 
 def batch_to_tensors(batch, n_tokens, max_length):
     """
@@ -88,7 +89,8 @@ def train(model, training_data, validation_data,
         averaged_loss = 0
         averaged_accuracy = 0
         training_batches = prepare_batches(training_data, batch_size) #returning batches of a given size
-        for batch in training_batches:
+        training_num_batches = ((len(training_data) - 1) // batch_size) + 1
+        for batch in tqdm(training_batches, total=training_num_batches):
 
             #skip batches that are undersized
             if len(batch[0]) != batch_size:
@@ -129,11 +131,12 @@ def train(model, training_data, validation_data,
             model.eval()
             validation_batches = prepare_batches(validation_data,
                     batch_size)
+            validation_num_batches = ((len(validation_data) - 1) // batch_size) + 1
             #get loss per batch
             val_loss = 0
             n_batches = 0
             val_accuracy = 0
-            for batch in validation_batches:
+            for batch in tqdm(validation_batches, total=validation_num_batches):
 
                 if len(batch[0]) != batch_size:
                     continue
