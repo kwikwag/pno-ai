@@ -147,7 +147,9 @@ class PreprocessingPipeline():
             else:
                 #todo: write logic to safely catch if there are non piano instruments,
                 #or extract the piano midi if it exists
-                raise PreprocessingError("Non-piano midi detected")
+                print('WARNING: Non-piano midi detected. Skipping')
+                continue
+                # raise PreprocessingError("Non-piano midi detected")
             note_sequence = apply_sustain(piano_data)
             note_sequence = sorted(note_sequence, key = lambda x: (x.start, x.pitch))
             note_sequences.append(note_sequence)
