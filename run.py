@@ -1,17 +1,23 @@
 #run this on a GPU instance
 #assumes you are inside the pno-ai directory
 
-import os, time, datetime
+import argparse
+import os
+import time
+import datetime
+from random import shuffle
+
 import torch
 import torch.nn as nn
-from random import shuffle
-from preprocess import PreprocessingPipeline
-from train import train
-from model import MusicTransformer
-import argparse
+
+from .preprocess import PreprocessingPipeline
+from .train import train
+from .model import MusicTransformer
 
 def main():
     parser = argparse.ArgumentParser("Script to train model on a GPU")
+    parser.add_argument("--input-dir", type=str, default='data',
+            help="Directory to read MIDI files from.")
     parser.add_argument("--checkpoint", type=str, default=None,
             help="Optional path to saved model, if none provided, the model is trained from scratch.")
     parser.add_argument("--n_epochs", type=int, default=5,
@@ -32,7 +38,7 @@ def main():
         print(f"Successfully loaded checkpoint at {args.checkpoint}")
     #rule of thumb: 1 minute is roughly 2k tokens
     
-    pipeline = PreprocessingPipeline(input_dir="data", stretch_factors=[0.975, 1, 1.025],
+    pipeline = PreprocessingPipeline(input_dir=args.input_dir, stretch_factors=[0.975, 1, 1.025],
             split_size=30, sampling_rate=sampling_rate, n_velocity_bins=n_velocity_bins,
             transpositions=range(-2,3), training_val_split=0.9, max_encoded_length=seq_length+1,
                                     min_encoded_length=257)
