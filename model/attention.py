@@ -73,7 +73,7 @@ class MultiheadedAttention(nn.Module):
         scores = scores.masked_fill(subsequent_mask == 1, -1e9)
         if mask is not None:
             mask = mask.repeat_interleave(h, 0)
-            wtf = (mask == 0).nonzero().transpose(0,1)
+            wtf = (mask == 0).nonzero(as_tuple=False).transpose(0,1)
             scores[wtf[0], wtf[1], :] = -1e9
 
         
