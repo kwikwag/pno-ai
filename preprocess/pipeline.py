@@ -1,17 +1,18 @@
 import os, random, copy
+
+import numpy as np
+import six
+import tqdm
 import pretty_midi
 from pretty_midi import ControlChange
-import six
+
 from .sequence_encoder import SequenceEncoder
-import numpy as np
 from ..helpers import vectorize
 
 class PreprocessingError(Exception):
     pass
 
 class PreprocessingPipeline():
-    #set a random seed
-    SEED = 1811
     """
     Pipeline to convert MIDI files to cleaned Piano Midi Note Sequences, split into 
     a more manageable length.
@@ -26,7 +27,7 @@ class PreprocessingPipeline():
     def __init__(self, input_dir, stretch_factors = [0.95, 0.975, 1, 1.025, 1.05],
             split_size = 30, sampling_rate = 125, n_velocity_bins = 32,
             transpositions = range(-3,4), training_val_split = 0.9, 
-            max_encoded_length = 512, min_encoded_length = 33):
+            max_encoded_length = 512, min_encoded_length = 33, seed=1811):
         self.input_dir = input_dir
         self.split_samples = dict()
         self.stretch_factors = stretch_factors
@@ -50,7 +51,8 @@ class PreprocessingPipeline():
                 max_events = max_encoded_length)
         self.encoded_sequences = dict()
 
-        random.seed(PreprocessingPipeline.SEED)
+        if seed is not None:
+            random.seed(seed)
 
         """
         Args:
@@ -118,7 +120,7 @@ class PreprocessingPipeline():
         midis = [f for f in os.listdir(os.getcwd()) if \
                 (f.endswith(".mid") or f.endswith("midi"))]
         print(f"Parsing {len(midis)} midi files in {os.getcwd()}...")
-        for m in midis:
+        for m in tqdm.tqdm(midis):
             with open(m, "rb") as f:
                 try:
                     midi_str = six.BytesIO(f.read())
@@ -147,7 +149,7 @@ class PreprocessingPipeline():
             else:
                 #todo: write logic to safely catch if there are non piano instruments,
                 #or extract the piano midi if it exists
-                print('WARNING: Non-piano midi detected. Skipping')
+                print('Warning: Non-piano midi detected. Skipping')
                 continue
                 # raise PreprocessingError("Non-piano midi detected")
             note_sequence = apply_sustain(piano_data)

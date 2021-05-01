@@ -1,5 +1,7 @@
 from pretty_midi import Note
 
+from tqdm import tqdm
+
 class SequenceEncoderError(Exception):
     pass
 
@@ -19,12 +21,11 @@ class SequenceEncoder():
     """
 
     def __init__(self, n_time_shift_events, n_velocity_events,
-            sequences_per_update=50000, min_events=33, max_events=513):
+            min_events=33, max_events=513):
         self.n_time_shift_events = n_time_shift_events
         self.n_events = 256 + n_time_shift_events + n_velocity_events
         self.timestep = 1 / n_time_shift_events
         self.velocity_bin_size = 128 // n_velocity_events
-        self.sequences_per_update = sequences_per_update
         self.min_events = min_events
         self.max_events = max_events
 
@@ -38,10 +39,7 @@ class SequenceEncoder():
         #count how many sequences are discarded/truncated due to length
         short_count, long_count = 0,0
         n_sequences = len(sample_sequences)
-        for i in range(n_sequences):
-            if not (i % self.sequences_per_update):
-                print("{:,} / {:,} sequences encoded".\
-                        format(i, n_sequences))
+        for i in tqdm(range(n_sequences)):
             event_sequence = []
             event_timestamps = []
             #attempt at efficiency gain: only add a velocity event if it's different

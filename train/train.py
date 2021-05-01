@@ -1,10 +1,13 @@
-from ..helpers import prepare_batches
-from .custom import Accuracy, smooth_cross_entropy, TFSchedule
+import time
+import traceback
+from random import shuffle
+
 import torch
 import torch.nn as nn
-import time
-from random import shuffle
 from tqdm import tqdm
+
+from ..helpers import prepare_batches
+from .custom import Accuracy, smooth_cross_entropy, TFSchedule
 
 def batch_to_tensors(batch, n_tokens, max_length):
     """
@@ -38,9 +41,9 @@ def batch_to_tensors(batch, n_tokens, max_length):
         return x, y, x_mask 
 
 def train(model, training_data, validation_data,
-        epochs, batch_size, batches_per_print=100, evaluate_per=1,
-        padding_index=-100, checkpoint_path=None,
-        custom_schedule=False, custom_loss=False):
+        epochs, batch_size, checkpoint_path,
+        batches_per_print=100, evaluate_per=1,
+        padding_index=-100, custom_schedule=False, custom_loss=False):
     """
     Training loop function.
     Args:
@@ -56,6 +59,24 @@ def train(model, training_data, validation_data,
         custom_schedule: (bool) If True, use a learning rate scheduler with a warmup ramp
         custom_loss: (bool) If True, set loss function as Cross Entropy with label smoothing
     """
+
+    if checkpoint_path is None:
+        raise ValueError('Must specify checkpoint_path')
+
+    last_saved_epoch = None
+    def save_checkpoint(e):
+        nonlocal last_saved_epoch
+        if last_saved_epoch == e:
+            return
+        try:
+            torch.save(model.state_dict(), f"{checkpoint_path}_e{e}")
+            last_saved_epoch = e
+            print("Checkpoint saved!")
+        except KeyboardInterrupt:
+            raise
+        except:
+            traceback.print_exc()
+            print("Error: checkpoint could not be saved...")        
 
     training_start_time = time.time()
 
@@ -83,14 +104,16 @@ def train(model, training_data, validation_data,
     #minus one because input/target sequences are shifted by one char
     max_length = max((len(L) 
         for L in (training_data + validation_data))) - 1
+
     for e in range(epochs):
         batch_start_time = time.time()
         batch_num = 1
         averaged_loss = 0
         averaged_accuracy = 0
         training_batches = prepare_batches(training_data, batch_size) #returning batches of a given size
-        training_num_batches = ((len(training_data) - 1) // batch_size) + 1
-        for batch in tqdm(training_batches, total=training_num_batches):
+        training_num_batches = len(range(0, len(training_data), batch_size))
+        progress = tqdm(training_batches, total=training_num_batches)
+        for batch in progress:
 
             #skip batches that are undersized
             if len(batch[0]) != batch_size:
@@ -116,8 +139,7 @@ def train(model, training_data, validation_data,
             averaged_loss += training_loss
             averaged_accuracy += accuracy(y_hat, y, x_mask)
             if batch_num % batches_per_print == 0:
-                print(f"batch {batch_num}, loss: {averaged_loss / batches_per_print : .2f}")
-                print(f"accuracy: {averaged_accuracy / batches_per_print : .2f}")
+                progress.set_description(f'loss={averaged_loss / batches_per_print : .2f}, acc={averaged_accuracy / batches_per_print : .2f}')
                 averaged_loss = 0
                 averaged_accuracy = 0
             batch_num += 1
@@ -131,7 +153,7 @@ def train(model, training_data, validation_data,
             model.eval()
             validation_batches = prepare_batches(validation_data,
                     batch_size)
-            validation_num_batches = ((len(validation_data) - 1) // batch_size) + 1
+            validation_num_batches = len(range(0, len(validation_data), batch_size))
             #get loss per batch
             val_loss = 0
             n_batches = 0
@@ -150,24 +172,22 @@ def train(model, training_data, validation_data,
                 val_accuracy += accuracy(y_hat, y, x_mask)
                 n_batches += 1
 
-            if checkpoint_path is not None:
-                try:
-                    torch.save(model.state_dict(),
-                            checkpoint_path+f"_e{e}")
-                    print("Checkpoint saved!")
-                except KeyboardInterrupt:
-                    raise
-                except:
-                    print("Error: checkpoint could not be saved...")
+            save_checkpoint(e)
 
             model.train()
             #average out validation loss
-            val_accuracy = (val_accuracy / n_batches)
-            val_loss = (val_loss / n_batches)
-            validation_losses.append(val_loss)
-            print(f"validation loss: {val_loss:.2f}")
-            print(f"validation accuracy: {val_accuracy:.2f}")
+            
+            if n_batches:
+                val_accuracy = (val_accuracy / n_batches)
+                val_loss = (val_loss / n_batches)
+                validation_losses.append(val_loss)
+                print(f"validation loss: {val_loss:.2f}")
+                print(f"validation accuracy: {val_accuracy:.2f}")
+            else:
+                print("Warning: No validation data")
             shuffle(validation_data)
+
+    save_checkpoint(len(epochs) - 1)
 
     return training_losses
 
