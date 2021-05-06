@@ -9,8 +9,10 @@ from pretty_midi import ControlChange
 from .sequence_encoder import SequenceEncoder
 from ..helpers import vectorize
 
+
 class PreprocessingError(Exception):
     pass
+
 
 class PreprocessingPipeline():
     """
@@ -24,31 +26,32 @@ class PreprocessingPipeline():
         self.split_samples (dict of lists): when the pipeline is run, has two keys, "training" and "validation," each holding a list of split MIDI note sequences.
         self.encoded_sequences (dict of lists): Keys are "training" and "validation." Each holds a list of encoded event sequences, a sparse numeric representation of a MIDI sample.
     """
-    def __init__(self, input_dir, stretch_factors = [0.95, 0.975, 1, 1.025, 1.05],
-            split_size = 30, sampling_rate = 125, n_velocity_bins = 32,
-            transpositions = range(-3,4), training_val_split = 0.9, 
-            max_encoded_length = 512, min_encoded_length = 33, seed=1811):
+
+    def __init__(self, input_dir, stretch_factors=[0.95, 0.975, 1, 1.025, 1.05],
+                 split_size=30, sampling_rate=125, n_velocity_bins=32,
+                 transpositions=range(-3, 4), training_val_split=0.9,
+                 max_encoded_length=512, min_encoded_length=33, seed=1811):
         self.input_dir = input_dir
         self.split_samples = dict()
         self.stretch_factors = stretch_factors
-        #size (in seconds) in which to split midi samples
+        # size (in seconds) in which to split midi samples
         self.split_size = split_size
-        #In hertz (beats per second), quantize sample timings to this discrete frequency
-        #So a sampling rate of 125 hz means a smallest time steps of 8 ms
+        # In hertz (beats per second), quantize sample timings to this discrete frequency
+        # So a sampling rate of 125 hz means a smallest time steps of 8 ms
         self.sampling_rate = sampling_rate
-        #Quantize sample dynamics (Velocity 1-127) to a smaller number of bins
-        #this should be an *integer* dividing 128 cleanly: 2,4,8,16,32,64, or 128. 
+        # Quantize sample dynamics (Velocity 1-127) to a smaller number of bins
+        # this should be an *integer* dividing 128 cleanly: 2,4,8,16,32,64, or 128.
         self.n_velocity_bins = n_velocity_bins
         self.transpositions = transpositions
-        
-        #Fraction of raw MIDI data that goes to the training set
-        #the remainder goes to validat
+
+        # Fraction of raw MIDI data that goes to the training set
+        # the remainder goes to validat
         self.training_val_split = training_val_split
 
-        self.encoder = SequenceEncoder(n_time_shift_events = sampling_rate,
-                n_velocity_events = n_velocity_bins, 
-                min_events = min_encoded_length,
-                max_events = max_encoded_length)
+        self.encoder = SequenceEncoder(n_time_shift_events=sampling_rate,
+                                       n_velocity_events=n_velocity_bins,
+                                       min_events=min_encoded_length,
+                                       max_events=max_encoded_length)
         self.encoded_sequences = dict()
 
         if seed is not None:
@@ -68,20 +71,19 @@ class PreprocessingPipeline():
             min_encoded_length (int): Discard encoded samples containing fewer events than this number.
         """
 
-
     def run(self):
         """
         Main pipeline call...parse midis, split into test and validation sets,
         augment, quantize, sample, and encode as event sequences. 
         """
-        midis = self.parse_files(chdir=True) 
+        midis = self.parse_files(chdir=True)
         total_time = sum([m.get_end_time() for m in midis])
-        print("\n{} midis read, or {:.1f} minutes of music"\
-                .format(len(midis), total_time/60))
+        print("\n{} midis read, or {:.1f} minutes of music" \
+              .format(len(midis), total_time / 60))
 
         note_sequences = self.get_note_sequences(midis)
         del midis
-        #vectorize note sequences
+        # vectorize note sequences
         note_sequences = [vectorize(ns) for ns in note_sequences]
         print("{} note sequences extracted\n".format(len(note_sequences)))
         self.note_sequences = self.partition(note_sequences)
@@ -106,7 +108,7 @@ class PreprocessingPipeline():
         Recursively parse all MIDI files in a given directory to 
         PrettyMidi objects.
         """
-        if chdir: 
+        if chdir:
             home_dir = os.getcwd()
             os.chdir(self.input_dir)
 
@@ -118,14 +120,14 @@ class PreprocessingPipeline():
                 pretty_midis += self.parse_files()
                 os.chdir("..")
         midis = [f for f in os.listdir(os.getcwd()) if \
-                (f.endswith(".mid") or f.endswith("midi"))]
+                 (f.endswith(".mid") or f.endswith("midi"))]
         print(f"Parsing {len(midis)} midi files in {os.getcwd()}...")
         for m in tqdm.tqdm(midis):
             with open(m, "rb") as f:
                 try:
                     midi_str = six.BytesIO(f.read())
                     pretty_midis.append(pretty_midi.PrettyMIDI(midi_str))
-                    #print("Successfully parsed {}".format(m))
+                    # print("Successfully parsed {}".format(m))
                 except KeyboardInterrupt:
                     raise
                 except:
@@ -147,31 +149,30 @@ class PreprocessingPipeline():
             if m.instruments[0].program == 0:
                 piano_data = m.instruments[0]
             else:
-                #todo: write logic to safely catch if there are non piano instruments,
-                #or extract the piano midi if it exists
+                # todo: write logic to safely catch if there are non piano instruments,
+                # or extract the piano midi if it exists
                 print('Warning: Non-piano midi detected. Skipping')
                 continue
                 # raise PreprocessingError("Non-piano midi detected")
             note_sequence = apply_sustain(piano_data)
-            note_sequence = sorted(note_sequence, key = lambda x: (x.start, x.pitch))
+            note_sequence = sorted(note_sequence, key=lambda x: (x.start, x.pitch))
             note_sequences.append(note_sequence)
 
         return note_sequences
 
-
     def partition(self, sequences):
-       """
+        """
        Partition a list of Note sequences into a training set and validation set.
        Returns a dictionary {"training": training_data, "validation": validation_data}
        """
-       partitioned_sequences = {}
-       random.shuffle(sequences)
+        partitioned_sequences = {}
+        random.shuffle(sequences)
 
-       n_training = int(len(sequences) * self.training_val_split)
-       partitioned_sequences['training'] = sequences[:n_training]
-       partitioned_sequences['validation'] = sequences[n_training:]
+        n_training = int(len(sequences) * self.training_val_split)
+        partitioned_sequences['training'] = sequences[:n_training]
+        partitioned_sequences['validation'] = sequences[n_training:]
 
-       return partitioned_sequences
+        return partitioned_sequences
 
     def stretch_note_sequences(self, note_sequences):
         """
@@ -185,14 +186,13 @@ class PreprocessingPipeline():
                     stretched_note_sequences.append(note_sequence)
                     continue
                 stretched_sequence = np.copy(note_sequence)
-                #stretch note start time
-                stretched_sequence[:,0] *= factor
-                #stretch note end time
-                stretched_sequence[:,1] *= factor
+                # stretch note start time
+                stretched_sequence[:, 0] *= factor
+                # stretch note end time
+                stretched_sequence[:, 1] *= factor
                 stretched_note_sequences.append(stretched_sequence)
 
         return stretched_note_sequences
-
 
     def split_sequences(self, sequences):
         """
@@ -213,8 +213,8 @@ class PreprocessingPipeline():
                 if sample_length == 0:
                     sample_start = note[0]
                     if note[1] > self.split_size + sample_start:
-                        #prevent case of a zero-length sample
-                        #print(f"***Current note has length of more than {self.split_size} seconds...reducing duration")
+                        # prevent case of a zero-length sample
+                        # print(f"***Current note has length of more than {self.split_size} seconds...reducing duration")
                         note[1] = sample_start + self.split_size
                     sample.append(note)
                     sample_length = self.split_size
@@ -225,8 +225,8 @@ class PreprocessingPipeline():
                             sample_length = note[1] - sample_start
                     else:
                         samples.append(np.asarray(sample))
-                        #sample start should begin with the beginning of the
-                        #*next* note, how do I handle this...
+                        # sample start should begin with the beginning of the
+                        # *next* note, how do I handle this...
                         sample_length = 0
                         sample = []
                 i += 1
@@ -239,12 +239,12 @@ class PreprocessingPipeline():
         Quantizes note start/ends to a smallest perceptible timestep (~8ms) and note
         velocities to a few audibly distinct bins (around 32).
         """
-        #define smallest timestep (in seconds)
+        # define smallest timestep (in seconds)
         try:
             timestep = 1 / self.sampling_rate
         except ZeroDivisionError:
             timestep = 0
-        #define smallest dynamics increment
+        # define smallest dynamics increment
         try:
             velocity_step = 128 // self.n_velocity_bins
         except ZeroDivisionError:
@@ -252,21 +252,20 @@ class PreprocessingPipeline():
         for sample in samples:
             sample_start_time = next((note[0] for note in sample), 0)
             for note in sample:
-                #reshift note start and end times to begin at zero
+                # reshift note start and end times to begin at zero
                 note[0] -= sample_start_time
                 note[1] -= sample_start_time
-                #delete this 
+                # delete this
                 if note[0] < 0 or note[1] < 0:
                     raise PreprocessingError
                 if timestep:
-                    #quantize timing
+                    # quantize timing
                     note[0] = (note[0] * self.sampling_rate) // 1 * timestep
                     note[1] = (note[1] * self.sampling_rate) // 1 * timestep
                 if velocity_step:
-                    #quantize dynamics
-                    #smallest velocity is 1 (otherwise we can't hear it!)
-                    note[3] = (note[3] // velocity_step *\
-                            velocity_step) + 1
+                    # quantize dynamics
+                    # smallest velocity is 1 (otherwise we can't hear it!)
+                    note[3] = (note[3] // velocity_step * velocity_step) + 1
 
     def transpose_samples(self, samples):
         """
@@ -279,10 +278,10 @@ class PreprocessingPipeline():
                     transposed_samples.append(sample)
                     continue
                 transposed_sample = np.copy(sample)
-                #shift pitches in sample by transposition
-                transposed_sample[:,2] += transposition
-                #should I adjust pitches that fall out of the range of 
-                #a piano's 88 keys? going to be pretty uncommon.
+                # shift pitches in sample by transposition
+                transposed_sample[:, 2] += transposition
+                # should I adjust pitches that fall out of the range of
+                # a piano's 88 keys? going to be pretty uncommon.
                 transposed_samples.append(transposed_sample)
 
         return transposed_samples

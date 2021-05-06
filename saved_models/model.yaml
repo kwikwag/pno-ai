@@ -1,5 +1,5 @@
 music_model:
-  path: saved_models/tf_01232021_e19
+  path: tf_01232021_e19
   args:
     n_tokens: 413
     seq_length: 1024

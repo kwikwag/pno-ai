@@ -1,13 +1,14 @@
 import argparse, uuid, subprocess
 import torch
-from model import MusicTransformer
-from preprocess import SequenceEncoder, apply_sustain
-from helpers import sample, write_midi, vectorize
-import midi_input
+from .model import MusicTransformer
+from .preprocess import SequenceEncoder, apply_sustain
+from .helpers import sample, write_midi, vectorize
+# import .midi_input
 import six
 import pretty_midi
 from pretty_midi import ControlChange
 import yaml
+import os, traceback
 import copy
 
 class GeneratorError(Exception):
@@ -17,8 +18,10 @@ class GeneratorError(Exception):
 def main():
     parser = argparse.ArgumentParser("Script to generate MIDI tracks by sampling from a trained model.")
 
-    parser.add_argument("--model_key", type=str, 
+    parser.add_argument("--model_key", type=str, required=True,
             help="Key in saved_models/model.yaml, helps look up model arguments and path to saved checkpoint.")
+    parser.add_argument("--saved_models", type=str, default = 'saved_models',
+                        help="path to saved modele where model.yaml resides")
     parser.add_argument("--sample_length", type=int, default=512,
             help="number of events to generate")
     parser.add_argument("--temps", nargs="+", type=float, 
@@ -38,11 +41,17 @@ def main():
     model_key = args.model_key
 
     try:
-        model_dict = yaml.safe_load(open('saved_models/model.yaml'))[model_key]
-    except:
-        raise GeneratorError(f"could not find yaml information for key {model_key}")
+        yaml_path = os.path.join(args.saved_models, 'model.yaml')
+        yaml_data = yaml.safe_load(open(yaml_path))
+    except Exception as e:
+        raise GeneratorError(f"Could not read yaml..") from e
 
-    model_path = model_dict["path"]
+    try:
+        model_dict = yaml_data[model_key]
+    except Exception as e:
+        raise GeneratorError(f"could not find yaml information for key {model_key}") from e
+
+    model_path = os.path.join(args.saved_models, model_dict["path"])
     model_args = model_dict["args"]
     try:
         state = torch.load(model_path)

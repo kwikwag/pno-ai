@@ -1,5 +1,5 @@
-#run this on a GPU instance
-#assumes you are inside the pno-ai directory
+# run this on a GPU instance
+# assumes you are inside the pno-ai directory
 
 import argparse
 import os
@@ -14,23 +14,24 @@ from .preprocess import PreprocessingPipeline
 from .train import train
 from .model import MusicTransformer
 
+
 class ModelConfig:
     def __init__(
-        self, 
-        # preprocessing
-        sampling_rate=125, 
-        n_velocity_bins=32, 
-        seq_length=1024,
-        min_encoded_length=256,
-        split_size=30,
-        training_val_split=0.9,
-        transpositions=range(-2,3),
-        stretch_factors=(0.975, 1, 1.025),
-        # model
-        d_model=64, 
-        n_heads=8, 
-        d_feedforward=256, 
-        depth=4,
+            self,
+            # preprocessing
+            sampling_rate=125,
+            n_velocity_bins=32,
+            seq_length=1024,
+            min_encoded_length=256,
+            split_size=30,
+            training_val_split=0.9,
+            transpositions=range(-2, 3),
+            stretch_factors=(0.975, 1, 1.025),
+            # model
+            d_model=64,
+            n_heads=8,
+            d_feedforward=256,
+            depth=4,
     ):
         self.sampling_rate = sampling_rate
         self.n_velocity_bins = n_velocity_bins
@@ -45,17 +46,18 @@ class ModelConfig:
         self.d_feedforward = d_feedforward
         self.depth = depth
 
+
 def run_preprocess(model_config, input_dir, **rest):
     pipeline = PreprocessingPipeline(
-        input_dir=input_dir, 
+        input_dir=input_dir,
         stretch_factors=list(model_config.stretch_factors),
-        split_size=model_config.split_size, 
-        sampling_rate=model_config.sampling_rate, 
+        split_size=model_config.split_size,
+        sampling_rate=model_config.sampling_rate,
         n_velocity_bins=model_config.n_velocity_bins,
-        transpositions=model_config.transpositions, 
-        training_val_split=model_config.training_val_split, 
-        max_encoded_length=model_config.seq_length+1,
-        min_encoded_length=model_config.min_encoded_length+1)
+        transpositions=model_config.transpositions,
+        training_val_split=model_config.training_val_split,
+        max_encoded_length=model_config.seq_length + 1,
+        min_encoded_length=model_config.min_encoded_length + 1)
     pipeline_start = time.time()
     pipeline.run()
     runtime = time.time() - pipeline_start
@@ -65,21 +67,21 @@ def run_preprocess(model_config, input_dir, **rest):
 
 
 def run_train(
-    model_config, 
-    pipeline,
-    checkpoint, 
-    n_epochs, 
-    device=None, 
-    **rest):
+        model_config,
+        pipeline,
+        checkpoint,
+        n_epochs,
+        device=None,
+        **rest):
     n_tokens = 256 + model_config.sampling_rate + model_config.n_velocity_bins
     transformer = MusicTransformer(
-        n_tokens=n_tokens, 
-        seq_length=model_config.seq_length, 
-        d_model=model_config.d_model, 
-        n_heads=model_config.n_heads, 
-        d_feedforward=model_config.d_feedforward, 
-        depth=model_config.depth, 
-        positional_encoding=True, 
+        n_tokens=n_tokens,
+        seq_length=model_config.seq_length,
+        d_model=model_config.d_model,
+        n_heads=model_config.n_heads,
+        d_feedforward=model_config.d_feedforward,
+        depth=model_config.depth,
+        positional_encoding=True,
         relative_pos=True)
 
     if checkpoint is not None:
@@ -87,8 +89,8 @@ def run_train(
         state = torch.load(checkpoint, map_location=device)
         transformer.load_state_dict(state)
         print("done.")
-    #rule of thumb: 1 minute is roughly 2k tokens
-    
+    # rule of thumb: 1 minute is roughly 2k tokens
+
     today = datetime.date.today().strftime('%m%d%Y')
     checkpoint = f"saved_models/tf_{today}"
 
@@ -96,33 +98,35 @@ def run_train(
     validation_sequences = pipeline.encoded_sequences['validation']
 
     batch_size = 16
-    
+
     train(
         transformer, training_sequences, validation_sequences,
-        epochs = n_epochs, evaluate_per = 1,
-        batch_size = batch_size, batches_per_print=100,
+        epochs=n_epochs, evaluate_per=1,
+        batch_size=batch_size, batches_per_print=100,
         padding_index=0, checkpoint_path=checkpoint)
+
 
 def main():
     parser = argparse.ArgumentParser("Script to train model on a GPU")
     parser.add_argument("--input-dir", type=str, default='data',
-            help="Directory to read MIDI files from.")
+                        help="Directory to read MIDI files from.")
     parser.add_argument("--checkpoint", type=str, default=None,
-            help="Optional path to saved model, if none provided, the model is trained from scratch.")
+                        help="Optional path to saved model, if none provided, the model is trained from scratch.")
     parser.add_argument("--n_epochs", type=int, default=5,
-            help="Number of training epochs.")
+                        help="Number of training epochs.")
     args = parser.parse_args()
-    
+
     model_config = ModelConfig()
     pipeline = run_preprocess(
-        model_config=model_config, 
+        model_config=model_config,
         input_dir=args.input_dir)
     run_train(
-        model_config=model_config, 
+        model_config=model_config,
         pipeline=pipeline,
-        checkpoint=args.checkpoint, 
+        checkpoint=args.checkpoint,
         n_epochs=args.n_epochs,
     )
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     main()
