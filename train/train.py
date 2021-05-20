@@ -100,8 +100,6 @@ def train(model, training_data, validation_data,
     else:
         print("GPU not available, CPU used")
 
-    training_losses = []
-    validation_losses = []
     #pad to length of longest sequence
     #minus one because input/target sequences are shifted by one char
     max_length = max((len(L) 
@@ -122,6 +120,7 @@ def train(model, training_data, validation_data,
                 continue
             x, y, x_mask = batch_to_tensors(batch, model.n_tokens, 
                     max_length)
+
             y_hat = model(x, x_mask).transpose(1,2)
 
             #shape: (batch_size, n_tokens, seq_length)
@@ -136,10 +135,9 @@ def train(model, training_data, validation_data,
             #optimizer takes a step based on gradient
             optimizer.step()
             training_loss = loss.item()
-            training_losses.append(training_loss)
             #take average over subset of batch?
             averaged_loss += training_loss
-            averaged_accuracy += accuracy(y_hat, y, x_mask)
+            averaged_accuracy += accuracy(y_hat, y, x_mask).item()
             if batch_num % batches_per_print == 0:
                 progress.set_description(f'loss={averaged_loss / batches_per_print : .2f}, acc={averaged_accuracy / batches_per_print : .2f}')
                 averaged_loss = 0
@@ -147,34 +145,37 @@ def train(model, training_data, validation_data,
             batch_num += 1
 
         print(f"epoch: {e+1}/{epochs} | time: {(time.time() - batch_start_time) / 60:,.0f}m")
+        del training_batches
+        del progress
+        del batch
         shuffle(training_data)
 
         if (e + 1) % evaluate_per == 0:
 
             #deactivate backprop for evaluation
-            model.eval()
-            validation_batches = prepare_batches(validation_data,
-                    batch_size)
-            validation_num_batches = len(range(0, len(validation_data), batch_size))
-            #get loss per batch
-            val_loss = 0
-            n_batches = 0
-            val_accuracy = 0
-            for batch in tqdm(validation_batches, total=validation_num_batches):
+            with torch.no_grad():
+                model.eval()
+                validation_batches = prepare_batches(validation_data,
+                        batch_size)
+                validation_num_batches = len(range(0, len(validation_data), batch_size))
+                #get loss per batch
+                val_loss = 0
+                n_batches = 0
+                val_accuracy = 0
+                for batch in tqdm(validation_batches, total=validation_num_batches):
 
-                if len(batch[0]) != batch_size:
-                    continue
+                    if len(batch[0]) != batch_size:
+                        continue
 
-                x, y, x_mask = batch_to_tensors(batch, model.n_tokens, 
-                        max_length)
+                    x, y, x_mask = batch_to_tensors(batch, model.n_tokens, 
+                            max_length)
+                    y_hat = model(x, x_mask).transpose(1,2)
+                    loss = loss_function(y_hat, y)
+                    val_loss += loss.item()
+                    val_accuracy += accuracy(y_hat, y, x_mask).item()
+                    n_batches += 1
 
-                y_hat = model(x, x_mask).transpose(1,2)
-                loss = loss_function(y_hat, y)
-                val_loss += loss.item()
-                val_accuracy += accuracy(y_hat, y, x_mask)
-                n_batches += 1
-
-            save_checkpoint(e)
+                save_checkpoint(e)
 
             model.train()
             #average out validation loss
@@ -182,7 +183,6 @@ def train(model, training_data, validation_data,
             if n_batches:
                 val_accuracy = (val_accuracy / n_batches)
                 val_loss = (val_loss / n_batches)
-                validation_losses.append(val_loss)
                 print(f"validation loss: {val_loss:.2f}")
                 print(f"validation accuracy: {val_accuracy:.2f}")
             else:
@@ -190,6 +190,4 @@ def train(model, training_data, validation_data,
             shuffle(validation_data)
 
     save_checkpoint(epochs - 1)
-
-    return training_losses
 
