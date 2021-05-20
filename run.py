@@ -32,6 +32,8 @@ class ModelConfig:
             n_heads=8,
             d_feedforward=256,
             depth=4,
+            batch_size=16,
+            n_tokens_margin=256,
     ):
         self.sampling_rate = sampling_rate
         self.n_velocity_bins = n_velocity_bins
@@ -45,6 +47,8 @@ class ModelConfig:
         self.n_heads = n_heads
         self.d_feedforward = d_feedforward
         self.depth = depth
+        self.batch_size = batch_size
+        self.n_tokens_margin = n_tokens_margin
 
 
 def run_preprocess(model_config, input_dir, **rest):
@@ -73,7 +77,7 @@ def run_train(
         n_epochs,
         device=None,
         **rest):
-    n_tokens = 256 + model_config.sampling_rate + model_config.n_velocity_bins
+    n_tokens = model_config.n_tokens_margin + model_config.sampling_rate + model_config.n_velocity_bins
     transformer = MusicTransformer(
         n_tokens=n_tokens,
         seq_length=model_config.seq_length,
@@ -84,25 +88,26 @@ def run_train(
         positional_encoding=True,
         relative_pos=True)
 
+    checkpoint_out_dir = os.path.join(os.path.dirname(__file__), 'saved_models')
     if checkpoint is not None:
         print(f'Loading checking at {checkpoint}... ', end='')
         state = torch.load(checkpoint, map_location=device)
         transformer.load_state_dict(state)
+        checkpoint_out_dir = os.path.dirname(checkpoint)
         print("done.")
-    # rule of thumb: 1 minute is roughly 2k tokens
 
     today = datetime.date.today().strftime('%m%d%Y')
-    checkpoint = f"saved_models/tf_{today}"
+    checkpoint = os.path.join(checkpoint_out_dir, f"tf_{today}")
+    print('Checkpoint will be saved to:', checkpoint)
 
+    # rule of thumb: 1 minute is roughly 2k tokens
     training_sequences = pipeline.encoded_sequences['training']
     validation_sequences = pipeline.encoded_sequences['validation']
-
-    batch_size = 16
 
     train(
         transformer, training_sequences, validation_sequences,
         epochs=n_epochs, evaluate_per=1,
-        batch_size=batch_size, batches_per_print=100,
+        batch_size=model_config.batch_size, batches_per_print=100,
         padding_index=0, checkpoint_path=checkpoint)
 
 

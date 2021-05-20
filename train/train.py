@@ -68,8 +68,10 @@ def train(model, training_data, validation_data,
         nonlocal last_saved_epoch
         if last_saved_epoch == e:
             return
+        checkpoint_filename = f"{checkpoint_path}_e{e}"
+        print("Saving checkpoint:", checkpoint_filename)
         try:
-            torch.save(model.state_dict(), f"{checkpoint_path}_e{e}")
+            torch.save(model.state_dict(), checkpoint_filename)
             last_saved_epoch = e
             print("Checkpoint saved!")
         except KeyboardInterrupt:
@@ -187,7 +189,7 @@ def train(model, training_data, validation_data,
                 print("Warning: No validation data")
             shuffle(validation_data)
 
-    save_checkpoint(len(epochs) - 1)
+    save_checkpoint(epochs - 1)
 
     return training_losses
 
