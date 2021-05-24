@@ -1,5 +1,5 @@
 music_model:
-  path: tf_01232021_e19
+  path: tf_05202021_e33
   args:
     n_tokens: 413
     seq_length: 1024

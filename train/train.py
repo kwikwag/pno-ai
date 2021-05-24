@@ -42,7 +42,7 @@ def batch_to_tensors(batch, n_tokens, max_length):
 
 def train(model, training_data, validation_data,
         epochs, batch_size, checkpoint_path,
-        batches_per_print=100, evaluate_per=1,
+        num_avg=100, evaluate_per=1,
         padding_index=-100, custom_schedule=False, custom_loss=False):
     """
     Training loop function.
@@ -52,7 +52,7 @@ def train(model, training_data, validation_data,
         validation_data: List of encoded music sequences
         epochs: Number of iterations over training batches
         batch_size: _
-        batches_per_print: How often to print training loss
+        num_avg: Number of batches to calculate metrics (loss, accuracy) over
         evaluate_per: calculate validation loss after this many epochs
         padding_index: ignore this sequence token in loss calculation
         checkpoint_path: (str or None) If defined, save the model's state dict to this file path after validation
@@ -108,8 +108,8 @@ def train(model, training_data, validation_data,
     for e in range(epochs):
         batch_start_time = time.time()
         batch_num = 1
-        averaged_loss = 0
-        averaged_accuracy = 0
+        last_losses = []
+        last_accuracies = []
         training_batches = prepare_batches(training_data, batch_size) #returning batches of a given size
         training_num_batches = len(range(0, len(training_data), batch_size))
         progress = tqdm(training_batches, total=training_num_batches)
@@ -134,20 +134,19 @@ def train(model, training_data, validation_data,
             loss.backward()
             #optimizer takes a step based on gradient
             optimizer.step()
-            training_loss = loss.item()
             #take average over subset of batch?
-            averaged_loss += training_loss
-            averaged_accuracy += accuracy(y_hat, y, x_mask).item()
-            if batch_num % batches_per_print == 0:
-                progress.set_description(f'loss={averaged_loss / batches_per_print : .2f}, acc={averaged_accuracy / batches_per_print : .2f}')
-                averaged_loss = 0
-                averaged_accuracy = 0
+            last_losses = (last_losses + [loss.item()])[-num_avg:]
+            with torch.no_grad():
+                last_accuracies = (last_accuracies + [accuracy(y_hat, y, x_mask).item()])[-num_avg:]
+            progress.set_description(f'loss={torch.mean(torch.tensor(last_losses)) : .2f}, acc={torch.mean(torch.tensor(last_accuracies)) : .2f}')
             batch_num += 1
 
         print(f"epoch: {e+1}/{epochs} | time: {(time.time() - batch_start_time) / 60:,.0f}m")
         del training_batches
         del progress
         del batch
+        del last_losses
+        del last_accuracies
         shuffle(training_data)
 
         if (e + 1) % evaluate_per == 0:

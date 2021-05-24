@@ -32,7 +32,7 @@ def main():
     rnn = MusicRNN(n_states, hidden_size, batch_first = not(pack_batches))
     train(rnn, training_sequences, validation_sequences, epochs = 2, 
             evaluate_per=1, batch_size=batch_size,
-            pack_batches=pack_batches, batches_per_print=1)
+            pack_batches=pack_batches, num_avg=1)
     sample(rnn, sample_length=10)
 
 if __name__ == "__main__":

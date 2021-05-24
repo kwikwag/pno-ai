@@ -107,7 +107,7 @@ def run_train(
     train(
         transformer, training_sequences, validation_sequences,
         epochs=n_epochs, evaluate_per=1,
-        batch_size=model_config.batch_size, batches_per_print=100,
+        batch_size=model_config.batch_size, num_avg=10,
         padding_index=0, checkpoint_path=checkpoint)
 
 
